@@ -4,6 +4,7 @@ server <- function(input, output) {
 
   data <- reactive({
     req(input$csv_input)
+    paste0(input$csv_input$datapath)
     df <- read.csv(input$csv_input$datapath)
     df$datetime <- as.POSIXct(df$datetime)  # Convert datetime column to POSIXct object
     df$error <- abs(df$observation - df$mean)
@@ -13,12 +14,15 @@ server <- function(input, output) {
   observeEvent(data(),{
     site_id_choices <- c(unique(data()$site_id))
     start_date_choices <- c(unique(data()$reference_datetime))
+    variable_choices <- c(unique(data()$variable))
     updateSelectInput(inputId = "site_id", choices = site_id_choices)
     updateSelectInput(inputId = "start_date", choices = start_date_choices)
+    updateSelectInput(inputId = "variable", choices = variable_choices)
   })
 
   site_id <- eventReactive(input$run_button,input$site_id)
   start_date <- eventReactive(input$run_button,input$start_date)
+  variable <- eventReactive(input$run_button, input$variable)
 
   # NEE Forecast Plot
   forecast_plot <- function(forecast_data, input_site, start_date, input_variable){
@@ -41,7 +45,12 @@ server <- function(input, output) {
         labels = c("95% Confidence Interval"),
         values = c("95% Confidence Interval" = "blue1")
       ) +
-      scale_y_continuous(name = "NEE (kg C m-2 s-1)") +
+      scale_y_continuous(switch(input_variable,
+        "le" = "LE (W m-2 s-1)",
+        "nee" = "NEE (kg C m-2 s-1) ",
+        # Add cases for other variables as needed
+        "(kg C m-2 s-1)"
+      )) +
       scale_x_datetime(
         name = "Date and Time",
         date_labels = "%Y-%m-%d",
@@ -89,7 +98,12 @@ server <- function(input, output) {
       geom_point(aes(color = datetime), size = 3) +
       geom_hline(yintercept = 0, color = "black") +
       xlab("Date") +
-      ylab("LE Error (kg C m-2 s-1)") +
+      ylab(switch(input_variable,
+                     "le" = "LE Error (kg C m-2 s-1)",
+                     "nee" = "NEE Error (kg C m-2 s-1) ",
+                     # Add cases for other variables as needed
+                     "(kg C m-2 s-1)"
+      )) +
       theme_minimal() +
       theme(
         axis.title.x = element_text(size = 14),
@@ -101,50 +115,27 @@ server <- function(input, output) {
       )
   }
 
-  #NEE Forecast Plot
-  nee_ft_plot <- eventReactive(input$run_button,{
-    forecast_plot(data(), site_id(), start_date(), "nee")
+  # Forecast Plot
+  ft_plot <- eventReactive(input$run_button,{
+    forecast_plot(data(), site_id(), start_date(), variable())
   })
 
 
-  output$nee_ft_plot <- renderPlotly(nee_ft_plot())
+  output$ft_plot <- renderPlotly(ft_plot())
 
-  #NEE Scatter PLot
-  nee_sct_plot <- eventReactive(input$run_button, {
-    scatter_plot(data(), site_id(), start_date(), "nee")
+  # Scatter Plot
+  sct_plot <- eventReactive(input$run_button, {
+    scatter_plot(data(), site_id(), start_date(), variable())
   })
 
-  output$nee_sct_plot <- renderPlotly(nee_sct_plot())
+  output$sct_plot <- renderPlotly(sct_plot())
 
-  #NEE Error plot
-  nee_err_plot <- eventReactive(input$run_button,{
-    error_plot(data(), site_id(), start_date(), "nee")
-  })
-
-
-  output$nee_err_plot <- renderPlotly(nee_err_plot())
-
-  # LE Forecast Plot
-  le_ft_plot <- eventReactive(input$run_button,{
-    forecast_plot(data(), site_id(), start_date(), "le")
+  # Error plot
+  err_plot <- eventReactive(input$run_button,{
+    error_plot(data(), site_id(), start_date(), variable())
   })
 
 
-  output$le_ft_plot <- renderPlotly(le_ft_plot())
-
-  # LE Scatter Plot
-  le_sct_plot <- eventReactive(input$run_button, {
-    scatter_plot(data(), site_id(), start_date(), "le")
-  })
-
-  output$le_sct_plot <- renderPlotly(le_sct_plot())
-
-  # LE Error Plot
-  le_err_plot <- eventReactive(input$run_button,{
-    error_plot(data(), site_id(), start_date(), "le")
-  })
-
-
-  output$le_err_plot <- renderPlotly(le_err_plot())
+  output$err_plot <- renderPlotly(err_plot())
 
 }
